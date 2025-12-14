@@ -15,25 +15,20 @@ sqlafunccodegen --help
 
 Capabilities:
 * "func" mode: functions directly wrap `sqlalchemy.func.<function_name>`
-  * no types, just parameter names
 * "python" and "asyncpg_only" modes: functions execute a select statement and
   return results
+  * Pydantic models for user-defined composite types
+  * set-returning functions return iterables
+* all modes:
   * many basic types
   * enums
   * arrays
-  * Pydantic models for user-defined composite types
-  * set-returning functions return iterables
-  * constraints in domains are not checked but the underlying type is used
-  * the Python types may be too restrictive or not restrictive enough, the
-    correspondence isn't perfect. some types aren't recognized and the generic
-    form in which sqlafunccodegen attempts to send them to the database may not
-    work.
-* all modes:
+  * constraints in domains are NOT checked but the underlying type is used
   * comments as docstrings
-  * functions with overloads not supported
-  * polymorphic pseudo-types not supported
-  * `IN`, `INOUT`, and `VARIADIC` params not supported
-  * default values are not available
+  * functions with overloads NOT supported
+  * polymorphic pseudo-types NOT supported
+  * `IN`, `INOUT`, and `VARIADIC` params NOT supported
+  * default values are NOT available
 
 Generated code dependencies:
 * asyncpg
