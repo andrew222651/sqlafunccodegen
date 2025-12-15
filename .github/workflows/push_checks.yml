@@ -15,7 +15,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.11"
+          python-version: "3.13"
       - name: Install black
         run: |
           pip install --upgrade pip setuptools wheel
@@ -29,7 +29,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.11"
+          python-version: "3.13"
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip setuptools wheel
@@ -45,7 +45,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.11"
+          python-version: "3.13"
       - name: Install isort
         run: |
           pip install --upgrade pip setuptools wheel
@@ -59,7 +59,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.11"
+          python-version: "3.13"
       - name: Install ruff
         run: |
           pip install --upgrade pip setuptools wheel
@@ -73,7 +73,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.11"
+          python-version: "3.13"
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip setuptools wheel
@@ -87,7 +87,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.11"
+          python-version: "3.13"
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip setuptools wheel
