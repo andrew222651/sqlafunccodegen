@@ -9,7 +9,7 @@ dependencies = [
     "asyncpg==0.30.*",
     "dukpy==0.3.*",
     "pydantic==2.*",
-    "sqlalchemy==2.0.31",
+    "sqlalchemy[asyncio]==2.0.31",
     "typer==0.20.*"
 ]
 version = "0.0.0"
