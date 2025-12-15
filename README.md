@@ -3,7 +3,9 @@
 Generate type-annotated Python functions that wrap PostgreSQL functions, using
 asyncpg and, optionally, SQLAlchemy.
 Like [sqlacodegen](https://github.com/agronholm/sqlacodegen)
-but for functions instead of tables.
+but for PostgreSQL functions instead of tables.
+
+Status: Experimental
 
 Benefit over PostgREST: You can call functions and execute other SQL within
 a transaction.
@@ -17,11 +19,11 @@ Capabilities:
 * "func" mode: functions directly wrap `sqlalchemy.func.<function_name>`
 * "python" and "asyncpg_only" modes: functions execute a select statement and
   return results
+  * enums
   * Pydantic models for user-defined composite types
   * set-returning functions return iterables
 * all modes:
   * many basic types
-  * enums
   * arrays
   * constraints in domains are NOT checked but the underlying type is used
   * comments as docstrings
@@ -40,6 +42,7 @@ Examples
 * "python" mode output: [`tests/out_python.py`](tests/out_python.py)
 * "func" mode output: [`tests/out_func.py`](tests/out_func.py)
 * "asyncpg_only" mode output: [`tests/out_asyncpg_only.py`](tests/out_asyncpg_only.py)
+
 
 # See also: sqlc
 

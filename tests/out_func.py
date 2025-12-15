@@ -15,8 +15,10 @@ import pydantic
 import sqlalchemy
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.functions import GenericFunction
+from sqlalchemy.sql.type_api import TypeEngine
+from sqlalchemy.sql._typing import _ColumnExpressionArgument
 _T = TypeVar('_T')
-_E = TypeVar('_E', bound=Enum)
 AnyArray = list[_T] | list['AnyArray']
 AnyArrayIn = Sequence[_T] | Sequence['AnyArray']
 JsonFrozen = Union[Mapping[str, "JsonFrozen"], Sequence["JsonFrozen"], str, int, float, bool, None]
@@ -36,116 +38,87 @@ def __convert_input(v):
         f: Any
 
     return S(f=v).model_dump()["f"]  # type: ignore
-def all_leagues(
-    
-) -> Any:
-    
-    return getattr(sqlalchemy.func, 'all_leagues')()
+ArrayIn__complex = TypeAliasType('ArrayIn__complex', 'Sequence[Any] | Sequence[ArrayIn__complex] | None')
+ArrayIn__int4 = TypeAliasType('ArrayIn__int4', 'Sequence[Union[int, None]] | Sequence[ArrayIn__int4] | None')
+Array__complex = TypeAliasType('Array__complex', 'list[asyncpg.Record | None] | list[Array__complex] | None')
+Array__int4 = TypeAliasType('Array__int4', 'list[Union[int, None]] | list[Array__int4] | None')
 
-def array_id(
-    arr: Any
-) -> Any:
+class array_id(GenericFunction[Array__int4]):
     
-    return getattr(sqlalchemy.func, 'array_id')(arr)
+    inherit_cache = True
+    type = postgresql.ARRAY(postgresql.INTEGER)
+    def __init__(self, arr: _ColumnExpressionArgument[ArrayIn__int4], **kwargs):
+        super().__init__(sqlalchemy.cast(arr, type_=postgresql.ARRAY(postgresql.INTEGER)), **kwargs)
 
-def c2vector_id(
-    c: Any
-) -> Any:
-    
-    return getattr(sqlalchemy.func, 'c2vector_id')(c)
 
-def can_return_null(
+class c2vector_id(GenericFunction[asyncpg.Record | None]):
     
-) -> Any:
-    
-    return getattr(sqlalchemy.func, 'can_return_null')()
+    inherit_cache = True
+    type = TypeEngine[asyncpg.Record | None]()
+    def __init__(self, c: _ColumnExpressionArgument[Any], **kwargs):
+        super().__init__(c, **kwargs)
 
-def circle_id(
-    c: Any
-) -> Any:
-    
-    return getattr(sqlalchemy.func, 'circle_id')(c)
 
-def complex_array_id(
-    ca: Any
-) -> Any:
+class circle_id(GenericFunction[Union[asyncpg.Circle, None]]):
     
-    return getattr(sqlalchemy.func, 'complex_array_id')(ca)
+    inherit_cache = True
+    type = TypeEngine[Union[asyncpg.Circle, None]]()
+    def __init__(self, c: _ColumnExpressionArgument[Union[asyncpg.Circle, None]], **kwargs):
+        super().__init__(c, **kwargs)
 
-def complex_id(
-    z: Any
-) -> Any:
-    
-    return getattr(sqlalchemy.func, 'complex_id')(z)
 
-def count_leagues(
+class complex_array_id(GenericFunction[Array__complex]):
     
-) -> Any:
-    
-    return getattr(sqlalchemy.func, 'count_leagues')()
+    inherit_cache = True
+    type = TypeEngine[Array__complex]()
+    def __init__(self, ca: _ColumnExpressionArgument[ArrayIn__complex], **kwargs):
+        super().__init__(ca, **kwargs)
 
-def count_leagues_by_nullable(
-    _nullable: Any
-) -> Any:
-    'Count leagues by nullable'
-    return getattr(sqlalchemy.func, 'count_leagues_by_nullable')(_nullable)
 
-def get_mood(
-    _mood: Any
-) -> Any:
+class complex_id(GenericFunction[asyncpg.Record | None]):
     
-    return getattr(sqlalchemy.func, 'get_mood')(_mood)
+    inherit_cache = True
+    type = TypeEngine[asyncpg.Record | None]()
+    def __init__(self, z: _ColumnExpressionArgument[Any], **kwargs):
+        super().__init__(z, **kwargs)
 
-def get_range(
-    
-) -> Any:
-    
-    return getattr(sqlalchemy.func, 'get_range')()
 
-def get_stuff(
-    _stuff: Any
-) -> Any:
+class get_mood(GenericFunction[str | None]):
     
-    return getattr(sqlalchemy.func, 'get_stuff')(_stuff)
+    inherit_cache = True
+    type = TypeEngine[str | None]()
+    def __init__(self, _mood: _ColumnExpressionArgument[str | None], **kwargs):
+        super().__init__(sqlalchemy.cast(_mood, type_=postgresql.ENUM(name='mood')), **kwargs)
 
-def getall(
-    
-) -> Any:
-    
-    return getattr(sqlalchemy.func, 'getall')()
 
-def ids(
+class get_range(GenericFunction[Any]):
     
-) -> Any:
-    
-    return getattr(sqlalchemy.func, 'ids')()
+    inherit_cache = True
+    type = TypeEngine[Any]()
+    def __init__(self,  **kwargs):
+        super().__init__( **kwargs)
 
-def jsonb_id(
-    j: Any
-) -> Any:
-    
-    return getattr(sqlalchemy.func, 'jsonb_id')(j)
 
-def nullables(
-    
-) -> Any:
-    
-    return getattr(sqlalchemy.func, 'nullables')()
+class jsonb_id(GenericFunction[Union[pydantic.JsonValue, None]]):
+    '''Returns the same jsonb value passed in'''
+    inherit_cache = True
+    type = postgresql.JSONB()
+    def __init__(self, j: _ColumnExpressionArgument[Union[JsonFrozen, None]], **kwargs):
+        super().__init__(sqlalchemy.cast(j, type_=postgresql.JSONB), **kwargs)
 
-def retvoid(
-    
-) -> Any:
-    
-    return getattr(sqlalchemy.func, 'retvoid')()
 
-def set_of_complex_arrays(
+class set_of_complex_arrays(GenericFunction[Array__complex]):
     
-) -> Any:
-    
-    return getattr(sqlalchemy.func, 'set_of_complex_arrays')()
+    inherit_cache = True
+    type = TypeEngine[Array__complex]()
+    def __init__(self,  **kwargs):
+        super().__init__( **kwargs)
 
-def unitthing(
-    z: Any
-) -> Any:
+
+class unitthing(GenericFunction[asyncpg.Record | None]):
     
-    return getattr(sqlalchemy.func, 'unitthing')(z)
+    inherit_cache = True
+    type = TypeEngine[asyncpg.Record | None]()
+    def __init__(self, z: _ColumnExpressionArgument[Any], **kwargs):
+        super().__init__(z, **kwargs)
+

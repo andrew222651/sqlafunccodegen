@@ -3,14 +3,14 @@ requires = ["setuptools >= 65.5.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-requires-python = ">=3.9,<4"
+requires-python = ">=3.13,<4"
 name = "sqlafunccodegen"
 dependencies = [
-    "asyncpg==0.29.*",
+    "asyncpg==0.30.*",
     "dukpy==0.3.*",
     "pydantic==2.*",
-    "sqlalchemy==2.0.30",
-    "typer==0.12.*"
+    "sqlalchemy==2.0.31",
+    "typer==0.20.*"
 ]
 version = "0.0.0"
 
@@ -30,11 +30,11 @@ profile = "black"
 line_length = 80
 lines_after_imports = 2
 combine_as_imports = true
-py_version=311
+py_version=313
 extend_skip_glob = ["tests/out*"]
 
 [tool.pyright]
-pythonVersion = "3.11"
+pythonVersion = "3.13"
 reportIncompatibleVariableOverride = true
 reportIncompatibleMethodOverride = true
 useLibraryCodeForTypes = true
