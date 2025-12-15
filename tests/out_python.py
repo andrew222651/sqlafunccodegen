@@ -16,7 +16,6 @@ import sqlalchemy
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 _T = TypeVar('_T')
-_E = TypeVar('_E', bound=Enum)
 AnyArray = list[_T] | list['AnyArray']
 AnyArrayIn = Sequence[_T] | Sequence['AnyArray']
 JsonFrozen = Union[Mapping[str, "JsonFrozen"], Sequence["JsonFrozen"], str, int, float, bool, None]
@@ -38,11 +37,9 @@ def __convert_input(v):
     return S(f=v).model_dump()["f"]  # type: ignore
 ArrayIn__complex = TypeAliasType('ArrayIn__complex', 'Sequence[Model__complex | None] | Sequence[ArrayIn__complex] | None')
 ArrayIn__int4 = TypeAliasType('ArrayIn__int4', 'Sequence[Union[int, None]] | Sequence[ArrayIn__int4] | None')
-ArrayIn__text = TypeAliasType('ArrayIn__text', 'Sequence[Union[str, None]] | Sequence[ArrayIn__text] | None')
 Array__complex = TypeAliasType('Array__complex', 'list[Model__complex | None] | list[Array__complex] | None')
 Array__int4 = TypeAliasType('Array__int4', 'list[Union[int, None]] | list[Array__int4] | None')
 Array__mood = TypeAliasType('Array__mood', 'list[Enum__mood | None] | list[Array__mood] | None')
-Array__text = TypeAliasType('Array__text', 'list[Union[str, None]] | list[Array__text] | None')
 
 class Enum__mood(str, Enum):
     happy = 'happy'
@@ -91,41 +88,6 @@ class Model__complex(pydantic.BaseModel):
             return data
     r: Annotated['Union[float, None]', pydantic.Field(description='The real part')]
     i: 'Union[float, None]'
-
-
-class Model__league(pydantic.BaseModel):
-
-    model_config=pydantic.ConfigDict(arbitrary_types_allowed=True)
-
-    @pydantic.model_validator(mode="before")
-    @classmethod
-    def validate_model(cls, data):
-        if isinstance(data, asyncpg.Record):
-            return dict(data.items())
-        elif isinstance(data, tuple):
-            # not sure when this can happen
-            return dict(
-                (k, v)
-                for k, v in zip(cls.model_fields, data)
-            )
-        else:
-            return data
-    id: 'Union[int, None]'
-    name: 'Union[str, None]'
-    nullable: 'Union[str, None]'
-    stuff: 'Array__text'
-    cs: 'Array__complex'
-async def all_leagues(
-    db_sesh: AsyncSession, 
-) -> Iterable[Model__league | None]:
-    
-    r = (await db_sesh.execute(
-        sqlalchemy.select(
-            getattr(sqlalchemy.func, 'all_leagues')()
-        )
-    )).scalars()
-    return (__convert_output(Model__league | None, i) for i in r)
-
 async def array_id(
     db_sesh: AsyncSession, arr: ArrayIn__int4
 ) -> Array__int4:
@@ -147,17 +109,6 @@ async def c2vector_id(
         )
     )).scalar_one_or_none()
     return __convert_output(Model__c2vector | None, r)
-
-async def can_return_null(
-    db_sesh: AsyncSession, 
-) -> Union[str, None]:
-    
-    r = (await db_sesh.execute(
-        sqlalchemy.select(
-            getattr(sqlalchemy.func, 'can_return_null')()
-        )
-    )).scalar_one_or_none()
-    return __convert_output(Union[str, None], r)
 
 async def circle_id(
     db_sesh: AsyncSession, c: Union[asyncpg.Circle, None]
@@ -192,35 +143,13 @@ async def complex_id(
     )).scalar_one_or_none()
     return __convert_output(Model__complex | None, r)
 
-async def count_leagues(
-    db_sesh: AsyncSession, 
-) -> Union[pydantic.JsonValue, None]:
-    
-    r = (await db_sesh.execute(
-        sqlalchemy.select(
-            getattr(sqlalchemy.func, 'count_leagues')()
-        )
-    )).scalar_one_or_none()
-    return __convert_output(Union[pydantic.JsonValue, None], r)
-
-async def count_leagues_by_nullable(
-    db_sesh: AsyncSession, _nullable: Union[str, None]
-) -> Union[int, None]:
-    'Count leagues by nullable'
-    r = (await db_sesh.execute(
-        sqlalchemy.select(
-            getattr(sqlalchemy.func, 'count_leagues_by_nullable')(sqlalchemy.literal(__convert_input(_nullable), type_=postgresql.TEXT))
-        )
-    )).scalar_one_or_none()
-    return __convert_output(Union[int, None], r)
-
 async def get_mood(
     db_sesh: AsyncSession, _mood: Enum__mood | None
 ) -> Enum__mood | None:
     
     r = (await db_sesh.execute(
         sqlalchemy.select(
-            getattr(sqlalchemy.func, 'get_mood')(sqlalchemy.literal(__convert_input(_mood), type_=postgresql.ENUM(name='mood')))
+            getattr(sqlalchemy.func, 'get_mood')(sqlalchemy.literal(__convert_input(_mood), type_=postgresql.ENUM('happy', 'sad', 'neutral', name='mood')))
         )
     )).scalar_one_or_none()
     return __convert_output(Enum__mood | None, r)
@@ -236,71 +165,16 @@ async def get_range(
     )).scalar_one_or_none()
     return __convert_output(Any, r)
 
-async def get_stuff(
-    db_sesh: AsyncSession, _stuff: ArrayIn__text
-) -> Iterable[Array__text]:
-    
-    r = (await db_sesh.execute(
-        sqlalchemy.select(
-            getattr(sqlalchemy.func, 'get_stuff')(sqlalchemy.literal(__convert_input(_stuff), type_=postgresql.ARRAY(postgresql.TEXT)))
-        )
-    )).scalars()
-    return (__convert_output(Array__text, i) for i in r)
-
-async def getall(
-    db_sesh: AsyncSession, 
-) -> Iterable[Model__league | None]:
-    
-    r = (await db_sesh.execute(
-        sqlalchemy.select(
-            getattr(sqlalchemy.func, 'getall')()
-        )
-    )).scalars()
-    return (__convert_output(Model__league | None, i) for i in r)
-
-async def ids(
-    db_sesh: AsyncSession, 
-) -> Iterable[Union[int, None]]:
-    
-    r = (await db_sesh.execute(
-        sqlalchemy.select(
-            getattr(sqlalchemy.func, 'ids')()
-        )
-    )).scalars()
-    return (__convert_output(Union[int, None], i) for i in r)
-
 async def jsonb_id(
     db_sesh: AsyncSession, j: Union[JsonFrozen, None]
 ) -> Union[pydantic.JsonValue, None]:
-    
+    '''Returns the same jsonb value passed in'''
     r = (await db_sesh.execute(
         sqlalchemy.select(
             getattr(sqlalchemy.func, 'jsonb_id')(sqlalchemy.literal(__convert_input(j), type_=postgresql.JSONB))
         )
     )).scalar_one_or_none()
     return __convert_output(Union[pydantic.JsonValue, None], r)
-
-async def nullables(
-    db_sesh: AsyncSession, 
-) -> Iterable[Union[str, None]]:
-    
-    r = (await db_sesh.execute(
-        sqlalchemy.select(
-            getattr(sqlalchemy.func, 'nullables')()
-        )
-    )).scalars()
-    return (__convert_output(Union[str, None], i) for i in r)
-
-async def retvoid(
-    db_sesh: AsyncSession, 
-) -> Union[None, None]:
-    
-    r = (await db_sesh.execute(
-        sqlalchemy.select(
-            getattr(sqlalchemy.func, 'retvoid')()
-        )
-    )).scalar_one_or_none()
-    return __convert_output(Union[None, None], r)
 
 async def set_of_complex_arrays(
     db_sesh: AsyncSession, 

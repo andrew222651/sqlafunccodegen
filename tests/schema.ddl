@@ -1,17 +1,12 @@
+-- as of sqlalchemy 2.0.31, there are errors if we define a table here with
+-- user-defined types in columns but don't define an ORM class for it.
+
 CREATE TYPE complex AS (
     r       float,
     i       float
 );
 comment on type complex is 'A complex number';
 comment on column complex.r is 'The real part';
-
-create table league (
-    id serial primary key,
-    name text not null,
-    nullable text,
-    stuff text[],
-    cs complex[]
-);
 
 create domain unit_complex as complex check (
   sqrt((VALUE).r*(VALUE).r + (VALUE).i*(VALUE).i) = 1
@@ -26,17 +21,9 @@ create type c2vector as (
 );
 
 
-insert into league (name, nullable) values('Premier League', null);
-insert into league (name, nullable, cs) values(
-    'Bundesliga', 'extra', array[(10, 20), (30, 40)]::complex[]);
-
 
 create function c2vector_id(c c2vector) returns c2vector as $$
     select c;
-$$ language sql;
-
-create function all_leagues() returns setof league as $$
-    select * from league order by id;
 $$ language sql;
 
 create function set_of_complex_arrays() returns setof complex[] as $$
@@ -50,45 +37,11 @@ create function complex_array_id(ca complex[]) returns complex[] as $$
     select ca;
 $$ language sql;
 
-create function count_leagues() returns json as $$
-    select '{"count": 4}'::json;
-$$ language sql;
-
-create function can_return_null() returns text as $$
-    select nullable from league limit 1;
-$$ language sql;
-
-create function count_leagues_by_nullable(_nullable text) returns integer as $$
-    select count(*) from league where nullable = _nullable;
-$$ language sql;
-
-comment on function count_leagues_by_nullable(text) is 'Count leagues by nullable';
-
-create function ids() returns setof integer as $$
-    select id from league;
-$$ language sql;
-
 create function overloaded(x int) returns void as $$
     select null;
 $$ language sql;
 create function overloaded(x text) returns void as $$
     select null;
-$$ language sql;
-
-create function nullables() returns setof text as $$
-    select nullable from league;
-$$ language sql;
-
-create function getall() returns setof league as $$
-    select * from league;
-$$ language sql;
-
-create function get_stuff(_stuff text[]) returns setof text[] as $$
-    select stuff from league where stuff && _stuff;
-$$ language sql;
-
-create function retvoid() returns void as $$
-    update league set name = name;
 $$ language sql;
 
 CREATE OR REPLACE FUNCTION sum_variadic(VARIADIC numbers int[])
@@ -160,4 +113,4 @@ create function jsonb_id(j jsonb) returns jsonb as $$
     select j;
 $$ language sql;
 
-
+comment on function jsonb_id is 'Returns the same jsonb value passed in';

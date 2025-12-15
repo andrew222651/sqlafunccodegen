@@ -3,7 +3,7 @@ import unittest
 from contextlib import asynccontextmanager
 
 import asyncpg
-from sqlalchemy import NullPool, literal, select
+from sqlalchemy import NullPool, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from . import out_asyncpg_only, out_func, out_python
@@ -148,41 +148,72 @@ class TestPython(unittest.IsolatedAsyncioTestCase):
             result = await out_python.c2vector_id(db_sesh, c2v)
         self.assertEqual(result, c2v)
 
-    async def test_all_leagues(self):
-        async with get_db_sesh() as db_sesh:
-            result = await out_python.all_leagues(db_sesh)
-        self.assertEqual(
-            list(result),
-            [
-                out_python.Model__league(
-                    id=1,
-                    name="Premier League",
-                    nullable=None,
-                    stuff=None,
-                    cs=None,
-                ),
-                out_python.Model__league(
-                    id=2,
-                    name="Bundesliga",
-                    nullable="extra",
-                    stuff=None,
-                    cs=[
-                        out_python.Model__complex(r=10, i=20),
-                        out_python.Model__complex(r=30, i=40),
-                    ],
-                ),
-            ],
-        )
-
 
 class TestSQLAlchemy(unittest.IsolatedAsyncioTestCase):
     async def test_complex_id(self):
         async with get_db_sesh() as db_sesh:
             result = (
                 await db_sesh.execute(
-                    select(out_func.complex_id(literal({"r": 1.0, "i": 2.0})))
+                    select(out_func.complex_id({"r": 1.0, "i": 2.0}))
                 )
             ).scalar_one_or_none()
         assert result is not None
         self.assertEqual(result["r"], 1.0)
         self.assertEqual(result["i"], 2.0)
+
+    async def test_c2vector_id(self):
+        d = {
+            "z1": {"r": 1.0, "i": 2.0},
+            "z2": {"r": 3.0, "i": 4.0},
+            "moods": ["happy"],
+        }
+        async with get_db_sesh() as db_sesh:
+            result = (
+                await db_sesh.execute(select(out_func.c2vector_id(d)))
+            ).scalar_one_or_none()
+        assert result is not None
+        self.assertEqual(result["moods"], ["happy"])
+
+    async def test_get_mood(self):
+        async with get_db_sesh() as db_sesh:
+            result = (
+                await db_sesh.execute(select(out_func.get_mood("sad")))
+            ).scalar_one_or_none()
+        assert result is not None
+        self.assertEqual(result, "happy")
+
+    async def test_array_id(self):
+        async with get_db_sesh() as db_sesh:
+            result = (
+                await db_sesh.execute(select(out_func.array_id([1, 2, 3])))
+            ).scalar_one_or_none()
+        assert result is not None
+        self.assertEqual(result, [1, 2, 3])
+
+    async def test_jsonb_id(self):
+        async with get_db_sesh() as db_sesh:
+            result1 = (
+                await db_sesh.execute(
+                    select(out_func.jsonb_id([1, 2, 3, {"a": "b"}]))
+                )
+            ).scalar_one_or_none()
+        assert result1 is not None
+        self.assertEqual(result1, [1, 2, 3, {"a": "b"}])
+
+        async with get_db_sesh() as db_sesh:
+            result2 = (
+                await db_sesh.execute(
+                    select(out_func.jsonb_id({"key": "val"})["key"].astext)
+                )
+            ).scalar_one_or_none()
+        assert result2 is not None
+        self.assertEqual(result2, "val")
+
+    async def test_get_range(self):
+        async with get_db_sesh() as db_sesh:
+            result1 = (
+                await db_sesh.execute(select(out_func.get_range()))
+            ).scalar_one_or_none()
+        assert result1 is not None
+        self.assertEqual(result1.lower, 1)
+        self.assertEqual(result1.upper, 10)

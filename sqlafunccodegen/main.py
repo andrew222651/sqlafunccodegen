@@ -7,13 +7,18 @@ from typing import Annotated, Sequence
 
 import dukpy
 import typer
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.ext.asyncio.engine import AsyncEngine, create_async_engine
+from sqlalchemy.ext.asyncio.engine import create_async_engine
 
 
-async def get_graphile_data(engine: AsyncEngine, schema: str) -> Sequence[dict]:
+SCHEMA = "public"
+
+
+async def get_graphile_data(dest: str) -> Sequence[dict]:
+    engine = create_async_engine("postgresql+asyncpg://" + dest)
+
     version_q = select(func.current_setting("server_version_num"))
     async with (
         AsyncSession(engine, expire_on_commit=False) as session,
@@ -37,7 +42,7 @@ async def get_graphile_data(engine: AsyncEngine, schema: str) -> Sequence[dict]:
     ):
         conn = await session.connection()
         return (
-            (await conn.exec_driver_sql(introspection_q, ([schema], False)))
+            (await conn.exec_driver_sql(introspection_q, ([SCHEMA], False)))
             .scalars()
             .all()
         )
@@ -54,7 +59,6 @@ def main(
         str,
         typer.Option(help="user:pass@host:port/dbname"),
     ] = "postgres:postgres@localhost:5432/postgres",
-    schema: str = "public",
     mode: Annotated[
         Mode,
         typer.Option(
@@ -72,25 +76,15 @@ def main(
     ] = Mode.python,
 ):
     dest = dest.removeprefix("postgres://").removeprefix("postgresql://")
-    python_generator = PythonGenerator(dest=dest, schema=schema)
+    python_generator = PythonGenerator(dest=dest)
     print(python_generator.generate(mode))
 
 
 class TypeStrings(BaseModel):
     python_type: str
-    # if an anyenum type is used, all polymorphic types become enums
-    python_type_anyenum: str | None = None
+    # python type for function inputs (if different from output type)
     python_type_in: str | None = None
-    python_type_anyenum_in: str | None = None
     sqla_type: str | None = None
-
-    @model_validator(mode="after")
-    def validate_model(self):
-        if self.python_type_anyenum_in is None:
-            assert (self.python_type_in is None) or (
-                self.python_type_anyenum is None
-            )
-        return self
 
 
 # types within a schema have unique names
@@ -119,29 +113,6 @@ pg_catalog_types = {
         python_type="pydantic.JsonValue",
         sqla_type="postgresql.JSONB",
         python_type_in="JsonFrozen",
-    ),
-    "anyarray": TypeStrings(
-        python_type="AnyArray[_T]",
-        sqla_type="None",
-        python_type_anyenum="AnyArray[_E]",
-        python_type_in="AnyArrayIn[_T]",
-        python_type_anyenum_in="AnyArrayIn[_E]",
-    ),
-    "anyelement": TypeStrings(
-        python_type="_T", sqla_type="None", python_type_anyenum="_E"
-    ),
-    "anyenum": TypeStrings(
-        python_type="_E", sqla_type="None", python_type_anyenum="_E"
-    ),
-    "anycompatible": TypeStrings(
-        python_type="_T", sqla_type="None", python_type_anyenum="_E"
-    ),
-    "anycompatiblearray": TypeStrings(
-        python_type="AnyArray[_T]",
-        sqla_type="None",
-        python_type_anyenum="AnyArray[_E]",
-        python_type_in="AnyArrayIn[_T]",
-        python_type_anyenum_in="AnyArrayIn[_E]",
     ),
     "bit": TypeStrings(
         python_type="asyncpg.BitString", sqla_type="postgresql.BIT"
@@ -221,7 +192,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 """
 
 DEFINITIONS = """_T = TypeVar('_T')
-_E = TypeVar('_E', bound=Enum)
 AnyArray = list[_T] | list['AnyArray']
 AnyArrayIn = Sequence[_T] | Sequence['AnyArray']
 JsonFrozen = Union[Mapping[str, "JsonFrozen"], Sequence["JsonFrozen"], str, int, float, bool, None]
@@ -250,14 +220,12 @@ class PythonGenerator:
     out_enums: set[str] = set()
     class_ids_to_generate: set[str] = set()
 
-    def __init__(self, dest: str, schema: str):
-        self.schema = schema
+    dest: str
 
-        engine = create_async_engine("postgresql+asyncpg://" + dest)
+    def __init__(self, dest: str):
+        self.dest = dest
 
-        self.graphile_data = asyncio.run(
-            get_graphile_data(engine=engine, schema=schema)
-        )
+        self.graphile_data = asyncio.run(get_graphile_data(dest=self.dest))
 
         self.graphile_type_by_id = {
             obj["id"]: obj
@@ -278,7 +246,7 @@ class PythonGenerator:
 
     @lru_cache(maxsize=None)
     def graphile_type_to_python(
-        self, graphile_type_id: str, anyenum: bool, in_: bool | None = None
+        self, graphile_type_id: str, in_: bool = False
     ) -> str:
         graphile_type = self.graphile_type_by_id[graphile_type_id]
 
@@ -292,7 +260,6 @@ class PythonGenerator:
                 ret = f"Array__{item_graphile_type['name']}"
             item_python_type = self.graphile_type_to_python(
                 item_graphile_type["id"],
-                anyenum=anyenum,
                 in_=in_,
             )
             # https://github.com/pydantic/pydantic/issues/8346
@@ -313,18 +280,14 @@ class PythonGenerator:
         elif graphile_type["namespaceName"] == "pg_catalog":
             if graphile_type["name"] in pg_catalog_types:
                 ts = pg_catalog_types[graphile_type["name"]]
-                if anyenum and in_ and ts.python_type_anyenum_in:
-                    pt = ts.python_type_anyenum_in
-                elif anyenum and ts.python_type_anyenum:
-                    pt = ts.python_type_anyenum
-                elif in_ and ts.python_type_in:
+                if in_ and ts.python_type_in:
                     pt = ts.python_type_in
                 else:
                     pt = ts.python_type
 
                 # we have to avoid `None | None` because it's an error
                 return f"Union[{pt}, None]"
-        elif graphile_type["namespaceName"] == self.schema:
+        elif graphile_type["namespaceName"] == SCHEMA:
             if graphile_type["enumVariants"]:
                 enum_name = f"Enum__{graphile_type['name']}"
                 e = f"class {enum_name}(str, Enum):\n"
@@ -341,7 +304,6 @@ class PythonGenerator:
             elif graphile_type["domainBaseTypeId"] is not None:
                 return self.graphile_type_to_python(
                     graphile_type["domainBaseTypeId"],
-                    anyenum=anyenum,
                     in_=in_,
                 )
         return "Any"
@@ -367,13 +329,12 @@ class PythonGenerator:
                 sqla_type = pg_catalog_types[graphile_type["name"]].sqla_type
                 assert sqla_type is not None
                 return sqla_type
-        elif graphile_type["namespaceName"] == self.schema:
+        elif graphile_type["namespaceName"] == SCHEMA:
             if graphile_type["enumVariants"]:
-                # we don't need the *enums parameter because we just use this
-                # for casting
-                return (
-                    "postgresql.ENUM(name=" f"{repr(graphile_type['name'])}" ")"
+                out_enum = ", ".join(
+                    repr(ev) for ev in graphile_type["enumVariants"]
                 )
+                return f"postgresql.ENUM({out_enum}, name={repr(graphile_type['name'])})"
             elif graphile_type["domainBaseTypeId"] is not None:
                 return self.graphile_type_to_sqla(
                     graphile_type["domainBaseTypeId"],
@@ -402,17 +363,21 @@ class PythonGenerator:
             sorted(gp for gp in generated_procedures if gp is not None)
         )
 
-        out_models = "\n\n".join(sorted(self.generate_models()))
-
         ret = IMPORTS
         if mode != Mode.asyncpg_only:
             ret += SQLALCHEMY_IMPORTS
         ret += DEFINITIONS
 
+        if mode in {Mode.python, Mode.asyncpg_only}:
+            # affects class fields
+            models_out = "\n\n".join(sorted(self.generate_models()))
+        else:
+            models_out = ""
+
         if mode == Mode.python or mode == Mode.asyncpg_only:
             ret += "\n".join(sorted(self.out_recursive_type_defs)) + "\n\n"
             ret += "\n".join(sorted(self.out_enums)) + "\n\n"
-            ret += out_models
+            ret += models_out
         ret += out_procedures
 
         return ret
@@ -453,10 +418,8 @@ class PythonGenerator:
                 basic_attr_type = (
                     "'"
                     + self.graphile_type_to_python(
-                        # composite types can't have polymorphic types in them,
-                        # so the anyenum value doesn't matter
+                        # composite types can't have polymorphic types in them
                         attr["typeId"],
-                        anyenum=False,
                     )
                     + "'"
                 )
@@ -506,26 +469,19 @@ class PythonGenerator:
         if polymorphic:
             return None
 
-        anyenum = "anyenum" in (
-            {at["name"] for at in arg_types} | {return_type["name"]}
-        )
-
         scalar_return_type = self.graphile_type_to_python(
-            return_type["id"], anyenum=anyenum, in_=False
+            return_type["id"], in_=False
         )
         if procedure["returnsSet"]:
             # we won't get null
             out_return_type = f"Iterable[{scalar_return_type}]"
-        else:
-            out_return_type = scalar_return_type
-
-        if procedure["returnsSet"]:
             out_python_return_stmt = (
                 f"return ("
                 f"__convert_output({scalar_return_type}, i)"
                 f" for i in r)"
             )
         else:
+            out_return_type = scalar_return_type
             out_python_return_stmt = (
                 f"return __convert_output({scalar_return_type}, r)"
             )
@@ -534,9 +490,7 @@ class PythonGenerator:
         for arg_type, arg_name in zip(arg_types, procedure["argNames"]):
             s = f"{arg_name}: "
             if mode == "python" or mode == "asyncpg_only":
-                s += self.graphile_type_to_python(
-                    arg_type["id"], anyenum=anyenum, in_=True
-                )
+                s += self.graphile_type_to_python(arg_type["id"], in_=True)
             else:
                 s += "Any"
             params_list.append(s)
@@ -561,12 +515,27 @@ class PythonGenerator:
                 for arg_name in procedure["argNames"]
             )
         elif mode == Mode.func:
-            out_args = ", ".join(procedure["argNames"])
+            out_args_list = []
+            for arg_type, arg_name in zip(arg_types, procedure["argNames"]):
+                v = arg_name
+                sqla_type = self.graphile_type_to_sqla(arg_type["id"])
+                if sqla_type == "None":
+                    out_args_list.append(v)
+                else:
+                    out_args_list.append(
+                        f"sqlalchemy.cast({v}, type_={sqla_type})"
+                    )
+            out_args = ", ".join(out_args_list)
 
         if procedure["description"] is None:
             out_docstring = ""
         else:
-            out_docstring = repr(procedure["description"])
+            dr = repr(procedure["description"])
+            if dr.startswith("'"):
+                dr = "''" + dr + "''"
+            else:
+                dr = '""' + dr + '""'
+            out_docstring = dr
 
         if mode == "python":
             if procedure["returnsSet"]:
@@ -605,11 +574,17 @@ class PythonGenerator:
     {out_docstring}
     return {ret_expr}"""
         elif mode == "func":
+            sqla_ret = self.graphile_type_to_sqla(return_type["id"])
+            if sqla_ret == "None":
+                ret_expr = f"getattr(sqlalchemy.func, '{procedure["name"]}')({out_args})"
+            else:
+                ret_expr = f"sqlalchemy.cast(getattr(sqlalchemy.func, '{procedure["name"]}')({out_args}), type_={sqla_ret})"
+
             return f"""def {procedure['name']}(
     {out_params}
 ) -> Any:
     {out_docstring}
-    return getattr(sqlalchemy.func, '{procedure["name"]}')({out_args})"""
+    return {ret_expr}"""
 
 
 def cli() -> int:
