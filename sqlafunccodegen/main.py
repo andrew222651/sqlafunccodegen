@@ -327,8 +327,7 @@ class PythonGenerator:
         elif graphile_type["namespaceName"] == "pg_catalog":
             if graphile_type["name"] in pg_catalog_types:
                 sqla_type = pg_catalog_types[graphile_type["name"]].sqla_type
-                assert sqla_type is not None
-                return sqla_type
+                return sqla_type or "None"
         elif graphile_type["namespaceName"] == SCHEMA:
             if graphile_type["enumVariants"]:
                 out_enum = ", ".join(
