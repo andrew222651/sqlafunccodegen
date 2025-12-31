@@ -36,6 +36,6 @@ Generated code dependencies:
 
 Examples
 * input: [`tests/schema.ddl`](tests/schema.ddl)
-* "sqlalchemy" mode output: [`tests/out_func.py`](tests/out_func.py)
+* "sqlalchemy" mode output: [`tests/out_sqlalchemy.py`](tests/out_sqlalchemy.py)
 * "asyncpg_only" mode output: [`tests/out_asyncpg_only.py`](tests/out_asyncpg_only.py)
 
