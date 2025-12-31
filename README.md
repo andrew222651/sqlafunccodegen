@@ -10,24 +10,30 @@ Usage:
 sqlafunccodegen --help
 ```
 
-Capabilities:
+* all modes:
+  * many basic types
+  * arrays
+  * comments as docstrings
+  * casts on inputs are added for convenience
 * "sqlalchemy" mode: functions behave like `sqlalchemy.func.<function_name>`
   * functions can be used inside SQLAlchemy query expressions
+  * note: if a function call cannot return null, you can wrap the call with
+    `sqlalchemy.NotNullable` and `None` will be removed as a possible Python
+    type for the expression
 * "asyncpg_only" mode: functions execute a select statement and
   return results
   * Python `Enum` types
   * Pydantic models for user-defined composite types
   * set-returning functions return lists
   * constraints in domains are NOT checked but the underlying type is used
-* all modes:
-  * casts are added for convenience
-  * many basic types
-  * arrays
-  * comments as docstrings
-  * functions with overloads NOT supported
-  * polymorphic pseudo-types NOT supported
-  * `IN`, `INOUT`, and `VARIADIC` params NOT supported
-  * default values are NOT available
+  * note: sqlafunccodegen assumes that JSON/JSONB types are encoded as Python
+    JSON types as in
+    https://magicstack.github.io/asyncpg/current/usage.html#example-automatic-json-conversion
+* not supported:
+  * functions with overloads
+  * polymorphic pseudo-types
+  * `IN`, `INOUT`, and `VARIADIC` params
+  * default values
 
 Generated code dependencies:
 * asyncpg

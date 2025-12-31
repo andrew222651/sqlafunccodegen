@@ -65,10 +65,7 @@ def main(
 'asyncpg_only' mode generates functions that take and return Python
 values, while 'sqlalchemy' mode generates functions that act
 as sqlalchemy.func functions and can be used within a
-SQLAlchemy SQL expression. 'asyncpg_only' mode doesn't
-require SQLAlchemy. Note: For 'asyncpg_only' mode, we assume that
-JSON/JSONB types are encoded as Python JSON types as in
-https://magicstack.github.io/asyncpg/current/usage.html#example-automatic-json-conversion
+SQLAlchemy SQL expression.
             """.strip()
         ),
     ] = Mode.sqlalchemy,

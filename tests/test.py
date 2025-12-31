@@ -118,7 +118,7 @@ class TestSQLAlchemy(unittest.IsolatedAsyncioTestCase):
         async with get_db_sesh() as db_sesh:
             result = (
                 await db_sesh.execute(select(out_sqlalchemy.get_mood("sad")))
-            ).scalar_one_or_none()
+            ).scalar_one()
         assert result is not None
         self.assertEqual(result, "happy")
 
