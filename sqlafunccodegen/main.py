@@ -1,7 +1,7 @@
 import asyncio
 import pathlib
 from collections import Counter, defaultdict
-from enum import Enum
+from enum import StrEnum
 from functools import lru_cache
 from typing import Annotated, Sequence
 
@@ -48,9 +48,8 @@ async def get_graphile_data(dest: str) -> Sequence[dict]:
         )
 
 
-class Mode(str, Enum):
-    python = "python"
-    func = "func"
+class Mode(StrEnum):
+    sqlalchemy = "sqlalchemy"
     asyncpg_only = "asyncpg_only"
 
 
@@ -62,18 +61,17 @@ def main(
     mode: Annotated[
         Mode,
         typer.Option(
-            help=(
-                "'python' mode generates functions that take and return Python"
-                " values, while 'func' mode generates functions that act"
-                " as sqlalchemy.func functions and can be used within a"
-                " SQLAlchemy SQL expression. 'asyncpg_only' mode is similar to"
-                " 'python' except it uses asyncpg connections and doesn't"
-                " require SQLAlchemy. For 'asyncpg_only' mode, we assume that"
-                " JSON/JSONB types are encoded as Python JSON types as in"
-                " https://magicstack.github.io/asyncpg/current/usage.html#example-automatic-json-conversion"
-            )
+            help="""
+'asyncpg_only' mode generates functions that take and return Python
+values, while 'sqlalchemy' mode generates functions that act
+as sqlalchemy.func functions and can be used within a
+SQLAlchemy SQL expression. 'asyncpg_only' mode doesn't
+require SQLAlchemy. Note: For 'asyncpg_only' mode, we assume that
+JSON/JSONB types are encoded as Python JSON types as in
+https://magicstack.github.io/asyncpg/current/usage.html#example-automatic-json-conversion
+            """.strip()
         ),
-    ] = Mode.python,
+    ] = Mode.sqlalchemy,
 ):
     dest = dest.removeprefix("postgres://").removeprefix("postgresql://")
     python_generator = PythonGenerator(dest=dest)
@@ -105,12 +103,12 @@ pg_catalog_types = {
     # python builtin json.loads function", asyncpg by itself requires a custom
     # encoder https://magicstack.github.io/asyncpg/current/usage.html#example-automatic-json-conversion
     "json": TypeStrings(
-        python_type="pydantic.JsonValue",
+        python_type="JsonValue",
         sqla_type="postgresql.JSON",
         python_type_in="JsonFrozen",
     ),
     "jsonb": TypeStrings(
-        python_type="pydantic.JsonValue",
+        python_type="JsonValue",
         sqla_type="postgresql.JSONB",
         python_type_in="JsonFrozen",
     ),
@@ -120,7 +118,7 @@ pg_catalog_types = {
     "varbit": TypeStrings(
         python_type="asyncpg.BitString", sqla_type="postgresql.VARBINARY"
     ),
-    "box": TypeStrings(python_type="asyncpg.Box", sqla_type="None"),
+    "box": TypeStrings(python_type="asyncpg.Box"),
     "bytea": TypeStrings(python_type="bytes", sqla_type="postgresql.BYTEA"),
     "cidr": TypeStrings(
         python_type="IPv4Network | IPv6Network", sqla_type="postgresql.CIDR"
@@ -130,7 +128,7 @@ pg_catalog_types = {
         sqla_type="postgresql.INET",
     ),
     "macaddr": TypeStrings(python_type="str", sqla_type="postgresql.MACADDR"),
-    "circle": TypeStrings(python_type="asyncpg.Circle", sqla_type="None"),
+    "circle": TypeStrings(python_type="asyncpg.Circle"),
     "date": TypeStrings(
         python_type="datetime.date", sqla_type="postgresql.DATE"
     ),
@@ -152,11 +150,11 @@ pg_catalog_types = {
         python_type="datetime.timedelta",
         sqla_type="postgresql.INTERVAL",
     ),
-    "line": TypeStrings(python_type="asyncpg.Line", sqla_type="None"),
-    "lseg": TypeStrings(python_type="asyncpg.LineSegment", sqla_type="None"),
-    "path": TypeStrings(python_type="asyncpg.Path", sqla_type="None"),
-    "point": TypeStrings(python_type="asyncpg.Point", sqla_type="None"),
-    "polygon": TypeStrings(python_type="asyncpg.Polygon", sqla_type="None"),
+    "line": TypeStrings(python_type="asyncpg.Line"),
+    "lseg": TypeStrings(python_type="asyncpg.LineSegment"),
+    "path": TypeStrings(python_type="asyncpg.Path"),
+    "point": TypeStrings(python_type="asyncpg.Point"),
+    "polygon": TypeStrings(python_type="asyncpg.Polygon"),
     "float4": TypeStrings(
         python_type="float", sqla_type="postgresql.FLOAT(24)"
     ),
@@ -170,32 +168,38 @@ pg_catalog_types = {
     "money": TypeStrings(python_type="str", sqla_type="postgresql.MONEY"),
 }
 
-IMPORTS = """import datetime
+IMPORTS = """\
+import datetime
 from decimal import Decimal
-from enum import Enum
+from enum import StrEnum
 from ipaddress import (
     IPv4Address, IPv6Address,
     IPv4Interface, IPv6Interface,
     IPv4Network, IPv6Network,
 )
-from typing import Annotated, Any, Iterable, Mapping, Sequence, TypeVar, Union
-from typing_extensions import TypeAliasType
+from typing import Annotated, Any, Mapping, Sequence, TypeAliasType, TypeVar, Union
 from uuid import UUID
 
 import asyncpg
+"""
+
+SQLALCHEMY_IMPORTS = """\
+import sqlalchemy
+from sqlalchemy.dialects import postgresql
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.functions import GenericFunction
+"""
+
+PYDANTIC_IMPORTS = """\
 import pydantic
 """
 
-SQLALCHEMY_IMPORTS = """import sqlalchemy
-from sqlalchemy.dialects import postgresql
-from sqlalchemy.ext.asyncio import AsyncSession
+DEFINITIONS = """\
+JsonValue = TypeAliasType("JsonValue", Union[dict[str, "JsonValue"], list["JsonValue"], str, int, float, bool, None])
+JsonFrozen = TypeAliasType("JsonFrozen", Union[Mapping[str, "JsonFrozen"], Sequence["JsonFrozen"], str, int, float, bool, None])
 """
 
-DEFINITIONS = """_T = TypeVar('_T')
-AnyArray = list[_T] | list['AnyArray']
-AnyArrayIn = Sequence[_T] | Sequence['AnyArray']
-JsonFrozen = Union[Mapping[str, "JsonFrozen"], Sequence["JsonFrozen"], str, int, float, bool, None]
-
+PYDANTIC_DEFINITIONS = """\
 def __convert_output(t, v):
     S = pydantic.create_model(
         'S',
@@ -214,16 +218,24 @@ def __convert_input(v):
 """
 
 
-class PythonGenerator:
-    # arrays in Postgres can have any dimension so we use recursive type aliases
-    out_recursive_type_defs: set[str] = set()
-    out_enums: set[str] = set()
-    class_ids_to_generate: set[str] = set()
+def docstringize(s: str) -> str:
+    if s.startswith("'"):
+        s = "''" + s + "''"
+    else:
+        s = '""' + s + '""'
 
-    dest: str
+    return s
+
+
+class PythonGenerator:
+    out_enums: set[str]
+    class_ids_to_generate: set[str]
 
     def __init__(self, dest: str):
         self.dest = dest
+
+        self.out_enums = set()
+        self.class_ids_to_generate = set()
 
         self.graphile_data = asyncio.run(get_graphile_data(dest=self.dest))
 
@@ -246,7 +258,7 @@ class PythonGenerator:
 
     @lru_cache(maxsize=None)
     def graphile_type_to_python(
-        self, graphile_type_id: str, in_: bool = False
+        self, graphile_type_id: str, in_: bool, mode: Mode
     ) -> str:
         graphile_type = self.graphile_type_by_id[graphile_type_id]
 
@@ -254,29 +266,17 @@ class PythonGenerator:
             item_graphile_type = self.graphile_type_by_id[
                 graphile_type["arrayItemTypeId"]
             ]
-            if in_:
-                ret = f"ArrayIn__{item_graphile_type['name']}"
-            else:
-                ret = f"Array__{item_graphile_type['name']}"
             item_python_type = self.graphile_type_to_python(
                 item_graphile_type["id"],
                 in_=in_,
+                mode=mode,
             )
-            # https://github.com/pydantic/pydantic/issues/8346
+            # in postgres, arrays can have any dimension, but asyncpg doesn't
+            # support more than one
             if in_:
-                rtd = (
-                    f"{ret} = TypeAliasType('{ret}',"
-                    f" 'Sequence[{item_python_type}] | Sequence[{ret}]"
-                    " | None')"
-                )
+                return f"Sequence[{item_python_type}] | None"
             else:
-                rtd = (
-                    f"{ret} = TypeAliasType('{ret}',"
-                    f" 'list[{item_python_type}] | list[{ret}] | None'"
-                    ")"
-                )
-            self.out_recursive_type_defs.add(rtd)
-            return ret
+                return f"list[{item_python_type}] | None"
         elif graphile_type["namespaceName"] == "pg_catalog":
             if graphile_type["name"] in pg_catalog_types:
                 ts = pg_catalog_types[graphile_type["name"]]
@@ -289,22 +289,32 @@ class PythonGenerator:
                 return f"Union[{pt}, None]"
         elif graphile_type["namespaceName"] == SCHEMA:
             if graphile_type["enumVariants"]:
+                if mode == Mode.sqlalchemy:
+                    return "str | None"
                 enum_name = f"Enum__{graphile_type['name']}"
-                e = f"class {enum_name}(str, Enum):\n"
+                e = f"class {enum_name}(StrEnum):\n"
                 if graphile_type["description"]:
-                    e += f"    {repr(graphile_type['description'])}\n"
+                    e += f"    {docstringize(repr(graphile_type['description']))}\n"
                 e += "\n".join(
                     f"    {ev} = '{ev}'" for ev in graphile_type["enumVariants"]
                 )
                 self.out_enums.add(e)
                 return f"{enum_name} | None"
             elif graphile_type["classId"] is not None:
+                if mode == Mode.sqlalchemy:
+                    if in_:
+                        return (
+                            "tuple | Mapping[str, Any] | asyncpg.Record | None"
+                        )
+                    else:
+                        return "asyncpg.Record | None"
                 self.class_ids_to_generate.add(graphile_type["classId"])
                 return f"Model__{graphile_type['name']} | None"
             elif graphile_type["domainBaseTypeId"] is not None:
                 return self.graphile_type_to_python(
                     graphile_type["domainBaseTypeId"],
                     in_=in_,
+                    mode=mode,
                 )
         return "Any"
 
@@ -319,15 +329,14 @@ class PythonGenerator:
             item_sqla_type = self.graphile_type_to_sqla(
                 item_graphile_type["id"]
             )
-            if item_sqla_type == "None":
+            if item_sqla_type != "None":
                 # ARRAY(None) doesn't seem to work
-                return "None"
-            else:
                 return f"postgresql.ARRAY({item_sqla_type})"
         elif graphile_type["namespaceName"] == "pg_catalog":
             if graphile_type["name"] in pg_catalog_types:
                 sqla_type = pg_catalog_types[graphile_type["name"]].sqla_type
-                return sqla_type or "None"
+                if sqla_type is not None:
+                    return sqla_type
         elif graphile_type["namespaceName"] == SCHEMA:
             if graphile_type["enumVariants"]:
                 out_enum = ", ".join(
@@ -338,45 +347,56 @@ class PythonGenerator:
                 return self.graphile_type_to_sqla(
                     graphile_type["domainBaseTypeId"],
                 )
+        # we could do `TypeEngine[$python_type]` as a fallback if there's any
+        # benefit
         return "None"
 
     def generate(self, mode: Mode) -> str:
-        procedures = [
+        graphile_procedures = [
             gd for gd in self.graphile_data if gd["kind"] == "procedure"
         ]
 
         # Graphile doesn't seem to support overloads
-        name_count = Counter(procedure["name"] for procedure in procedures)
+        name_count = Counter(
+            procedure["name"] for procedure in graphile_procedures
+        )
         overloads = {
             procedure["name"]
-            for procedure in procedures
+            for procedure in graphile_procedures
             if name_count[procedure["name"]] > 1
         }
         assert not overloads
 
         generated_procedures = [
             self.generate_procedure(procedure, mode=mode)
-            for procedure in procedures
+            for procedure in graphile_procedures
         ]
         out_procedures = "\n\n".join(
             sorted(gp for gp in generated_procedures if gp is not None)
         )
 
         ret = IMPORTS
-        if mode != Mode.asyncpg_only:
+        if mode == Mode.sqlalchemy:
             ret += SQLALCHEMY_IMPORTS
+        if mode == Mode.asyncpg_only:
+            ret += PYDANTIC_IMPORTS
+
         ret += DEFINITIONS
+        if mode == Mode.asyncpg_only:
+            ret += PYDANTIC_DEFINITIONS
 
-        if mode in {Mode.python, Mode.asyncpg_only}:
-            # affects class fields
-            models_out = "\n\n".join(sorted(self.generate_models()))
+        if mode == Mode.asyncpg_only:
+            # can affect `self.out_enums`.
+            # note that if we generate in asyncpg_only mode first, then
+            # sqlalchemy mode, we will have these extra values in
+            # `self.out_enums`.
+            out_models = "\n\n".join(sorted(self.generate_models()))
         else:
-            models_out = ""
+            out_models = ""
 
-        if mode == Mode.python or mode == Mode.asyncpg_only:
-            ret += "\n".join(sorted(self.out_recursive_type_defs)) + "\n\n"
+        if mode == Mode.asyncpg_only:
             ret += "\n".join(sorted(self.out_enums)) + "\n\n"
-            ret += models_out
+            ret += out_models
         ret += out_procedures
 
         return ret
@@ -419,6 +439,8 @@ class PythonGenerator:
                     + self.graphile_type_to_python(
                         # composite types can't have polymorphic types in them
                         attr["typeId"],
+                        in_=False,
+                        mode=Mode.asyncpg_only,
                     )
                     + "'"
                 )
@@ -469,121 +491,83 @@ class PythonGenerator:
             return None
 
         scalar_return_type = self.graphile_type_to_python(
-            return_type["id"], in_=False
+            return_type["id"], in_=False, mode=mode
         )
-        if procedure["returnsSet"]:
-            # we won't get null
-            out_return_type = f"Iterable[{scalar_return_type}]"
-            out_python_return_stmt = (
-                f"return ("
-                f"__convert_output({scalar_return_type}, i)"
-                f" for i in r)"
-            )
-        else:
-            out_return_type = scalar_return_type
-            out_python_return_stmt = (
-                f"return __convert_output({scalar_return_type}, r)"
-            )
 
         params_list = []
         for arg_type, arg_name in zip(arg_types, procedure["argNames"]):
             s = f"{arg_name}: "
-            if mode == "python" or mode == "asyncpg_only":
-                s += self.graphile_type_to_python(arg_type["id"], in_=True)
+            pt = self.graphile_type_to_python(
+                arg_type["id"], in_=True, mode=mode
+            )
+            if mode == Mode.asyncpg_only:
+                s += pt
             else:
-                s += "Any"
+                # see https://github.com/sqlalchemy/sqlalchemy/blob/0a1be6dcfab7b17613835248a368e6b822a53319/lib/sqlalchemy/sql/_typing.py#L229
+                # and https://github.com/sqlalchemy/sqlalchemy/blob/0a1be6dcfab7b17613835248a368e6b822a53319/lib/sqlalchemy/sql/functions.py#L1852
+                s += f"{pt} | sqlalchemy.ColumnExpressionArgument[{pt}]"
             params_list.append(s)
         out_params = ", ".join(params_list)
 
-        if mode == Mode.python:
+        if mode == Mode.sqlalchemy:
+            # e.g. if a function takes a JSONB, we can't just pass a python
+            # string because that becomes `TEXT` in pg which is a type
+            # error.
             out_args_list = []
             for arg_type, arg_name in zip(arg_types, procedure["argNames"]):
-                v = f"__convert_input({arg_name})"
-                # e.g. if a function takes a JSONB, we can't just pass a python
-                # string because that becomes `TEXT` in pg which is a type
-                # error. however, in some circumstances the call works if type_
-                # is None.
                 sqla_type = self.graphile_type_to_sqla(arg_type["id"])
-                out_args_list.append(
-                    f"sqlalchemy.literal({v}, type_={sqla_type})"
-                )
+                if sqla_type == "None":
+                    out_args_list.append(arg_name)
+                else:
+                    out_args_list.append(
+                        f"sqlalchemy.cast({arg_name}, type_={sqla_type})"
+                    )
             out_args = ", ".join(out_args_list)
-        elif mode == Mode.asyncpg_only:
+        else:
+            # somehow raw asyncpg works without casting
             out_args = ", ".join(
                 f"__convert_input({arg_name})"
                 for arg_name in procedure["argNames"]
             )
-        elif mode == Mode.func:
-            out_args_list = []
-            for arg_type, arg_name in zip(arg_types, procedure["argNames"]):
-                v = arg_name
-                sqla_type = self.graphile_type_to_sqla(arg_type["id"])
-                if sqla_type == "None":
-                    out_args_list.append(v)
-                else:
-                    out_args_list.append(
-                        f"sqlalchemy.cast({v}, type_={sqla_type})"
-                    )
-            out_args = ", ".join(out_args_list)
 
         if procedure["description"] is None:
             out_docstring = ""
         else:
-            dr = repr(procedure["description"])
-            if dr.startswith("'"):
-                dr = "''" + dr + "''"
-            else:
-                dr = '""' + dr + '""'
-            out_docstring = dr
+            out_docstring = docstringize(repr(procedure["description"]))
 
-        if mode == "python":
-            if procedure["returnsSet"]:
-                # each row has only one column, which may be a composite type
-                out_method = "scalars"
-            else:
-                # we use _or_none just in case
-                out_method = "scalar_one_or_none"
-
-            return f"""async def {procedure['name']}(
-    db_sesh: AsyncSession, {out_params}
-) -> {out_return_type}:
-    {out_docstring}
-    r = (await db_sesh.execute(
-        sqlalchemy.select(
-            getattr(sqlalchemy.func, '{procedure["name"]}')({out_args})
-        )
-    )).{out_method}()
-    {out_python_return_stmt}"""
-        elif mode == "asyncpg_only":
-            # for some reason, using asyncpg like this doesn't require any
-            # casting. e.g. a function that takes a json param can be passed
-            # a python string and it'll work as it should
+        if mode == "asyncpg_only":
             dollar_args = ", ".join(
                 f"${i+1}" for i in range(len(procedure["argNames"]))
             )
             func_expr = f"{procedure['name']}({dollar_args})"
             seq = f"'select {func_expr}', {out_args}"
             if procedure["returnsSet"]:
+                # we won't get None
+                out_return_type = f"list[{scalar_return_type}]"
                 ret_expr = f"[__convert_output({scalar_return_type}, r[0]) for r in await conn.fetch({seq})]"
             else:
+                out_return_type = scalar_return_type
                 ret_expr = f"__convert_output({scalar_return_type}, await conn.fetchval({seq}))"
             return f"""async def {procedure['name']}(
     conn: asyncpg.Connection, {out_params}
 ) -> {out_return_type}:
     {out_docstring}
     return {ret_expr}"""
-        elif mode == "func":
+        else:
+            # can be "None" and parens don't matter, see https://github.com/sqlalchemy/sqlalchemy/blob/a96c607cc53f16b364d5025c5a5de1470661d3c9/lib/sqlalchemy/sql/functions.py#L1623
             sqla_ret = self.graphile_type_to_sqla(return_type["id"])
-            if sqla_ret == "None":
-                ret_expr = f"getattr(sqlalchemy.func, '{procedure["name"]}')({out_args})"
-            else:
-                ret_expr = f"sqlalchemy.cast(getattr(sqlalchemy.func, '{procedure["name"]}')({out_args}), type_={sqla_ret})"
+            out_params_comma = out_params + "," if out_params else ""
+            out_args_comma = out_args + "," if out_args else ""
 
-            return f"""def {procedure['name']}(
-    {out_params}
-) -> Any:
-    {out_docstring}
-    return {ret_expr}"""
+            return f"""class {procedure['name']}(GenericFunction[{scalar_return_type}]):
+    inherit_cache = True
+    type = {sqla_ret}
+    package = "sqlafunccodegen"
+    def __init__(self, {out_params_comma} **kwargs):
+        {out_docstring}
+
+        super().__init__({out_args_comma} **kwargs)
+"""
 
 
 def cli() -> int:

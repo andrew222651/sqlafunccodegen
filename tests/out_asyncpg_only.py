@@ -1,22 +1,18 @@
 import datetime
 from decimal import Decimal
-from enum import Enum
+from enum import StrEnum
 from ipaddress import (
     IPv4Address, IPv6Address,
     IPv4Interface, IPv6Interface,
     IPv4Network, IPv6Network,
 )
-from typing import Annotated, Any, Iterable, Mapping, Sequence, TypeVar, Union
-from typing_extensions import TypeAliasType
+from typing import Annotated, Any, Mapping, Sequence, TypeAliasType, TypeVar, Union
 from uuid import UUID
 
 import asyncpg
 import pydantic
-_T = TypeVar('_T')
-AnyArray = list[_T] | list['AnyArray']
-AnyArrayIn = Sequence[_T] | Sequence['AnyArray']
-JsonFrozen = Union[Mapping[str, "JsonFrozen"], Sequence["JsonFrozen"], str, int, float, bool, None]
-
+JsonValue = TypeAliasType("JsonValue", Union[dict[str, "JsonValue"], list["JsonValue"], str, int, float, bool, None])
+JsonFrozen = TypeAliasType("JsonFrozen", Union[Mapping[str, "JsonFrozen"], Sequence["JsonFrozen"], str, int, float, bool, None])
 def __convert_output(t, v):
     S = pydantic.create_model(
         'S',
@@ -32,13 +28,7 @@ def __convert_input(v):
         f: Any
 
     return S(f=v).model_dump()["f"]  # type: ignore
-ArrayIn__complex = TypeAliasType('ArrayIn__complex', 'Sequence[Model__complex | None] | Sequence[ArrayIn__complex] | None')
-ArrayIn__int4 = TypeAliasType('ArrayIn__int4', 'Sequence[Union[int, None]] | Sequence[ArrayIn__int4] | None')
-Array__complex = TypeAliasType('Array__complex', 'list[Model__complex | None] | list[Array__complex] | None')
-Array__int4 = TypeAliasType('Array__int4', 'list[Union[int, None]] | list[Array__int4] | None')
-Array__mood = TypeAliasType('Array__mood', 'list[Enum__mood | None] | list[Array__mood] | None')
-
-class Enum__mood(str, Enum):
+class Enum__mood(StrEnum):
     happy = 'happy'
     sad = 'sad'
     neutral = 'neutral'
@@ -62,7 +52,7 @@ class Model__c2vector(pydantic.BaseModel):
             return data
     z1: 'Model__complex | None'
     z2: 'Model__complex | None'
-    moods: 'Array__mood'
+    moods: 'list[Enum__mood | None] | None'
 
 
 class Model__complex(pydantic.BaseModel):
@@ -86,10 +76,10 @@ class Model__complex(pydantic.BaseModel):
     r: Annotated['Union[float, None]', pydantic.Field(description='The real part')]
     i: 'Union[float, None]'
 async def array_id(
-    conn: asyncpg.Connection, arr: ArrayIn__int4
-) -> Array__int4:
+    conn: asyncpg.Connection, arr: Sequence[Union[int, None]] | None
+) -> list[Union[int, None]] | None:
     
-    return __convert_output(Array__int4, await conn.fetchval('select array_id($1)', __convert_input(arr)))
+    return __convert_output(list[Union[int, None]] | None, await conn.fetchval('select array_id($1)', __convert_input(arr)))
 
 async def c2vector_id(
     conn: asyncpg.Connection, c: Model__c2vector | None
@@ -104,10 +94,10 @@ async def circle_id(
     return __convert_output(Union[asyncpg.Circle, None], await conn.fetchval('select circle_id($1)', __convert_input(c)))
 
 async def complex_array_id(
-    conn: asyncpg.Connection, ca: ArrayIn__complex
-) -> Array__complex:
+    conn: asyncpg.Connection, ca: Sequence[Model__complex | None] | None
+) -> list[Model__complex | None] | None:
     
-    return __convert_output(Array__complex, await conn.fetchval('select complex_array_id($1)', __convert_input(ca)))
+    return __convert_output(list[Model__complex | None] | None, await conn.fetchval('select complex_array_id($1)', __convert_input(ca)))
 
 async def complex_id(
     conn: asyncpg.Connection, z: Model__complex | None
@@ -129,15 +119,15 @@ async def get_range(
 
 async def jsonb_id(
     conn: asyncpg.Connection, j: Union[JsonFrozen, None]
-) -> Union[pydantic.JsonValue, None]:
+) -> Union[JsonValue, None]:
     '''Returns the same jsonb value passed in'''
-    return __convert_output(Union[pydantic.JsonValue, None], await conn.fetchval('select jsonb_id($1)', __convert_input(j)))
+    return __convert_output(Union[JsonValue, None], await conn.fetchval('select jsonb_id($1)', __convert_input(j)))
 
 async def set_of_complex_arrays(
     conn: asyncpg.Connection, 
-) -> Iterable[Array__complex]:
+) -> list[list[Model__complex | None] | None]:
     
-    return [__convert_output(Array__complex, r[0]) for r in await conn.fetch('select set_of_complex_arrays()', )]
+    return [__convert_output(list[Model__complex | None] | None, r[0]) for r in await conn.fetch('select set_of_complex_arrays()', )]
 
 async def unitthing(
     conn: asyncpg.Connection, z: Model__complex | None
