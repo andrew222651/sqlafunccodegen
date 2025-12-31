@@ -86,6 +86,21 @@ class TestSQLAlchemy(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["r"], 1.0)
         self.assertEqual(result["i"], 2.0)
 
+    async def test_complex_array_id(self):
+        async with get_db_sesh() as db_sesh:
+            result = (
+                await db_sesh.execute(
+                    select(
+                        out_sqlalchemy.complex_array_id([{"r": 1.0, "i": 2.0}])
+                    )
+                )
+            ).scalar_one_or_none()
+        assert result is not None
+        self.assertEqual(len(result), 1)
+        assert result[0] is not None
+        self.assertEqual(result[0]["r"], 1.0)
+        self.assertEqual(result[0]["i"], 2.0)
+
     async def test_c2vector_id(self):
         d = {
             "z1": {"r": 1.0, "i": 2.0},

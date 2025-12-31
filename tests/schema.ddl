@@ -1,5 +1,5 @@
 -- as of sqlalchemy 2.0.31, there are errors if we define a table here with
--- user-defined types in columns but don't define an ORM class for it.
+-- user-defined types in columns but don't define an ORM class for the table.
 
 CREATE TYPE complex AS (
     r       float,

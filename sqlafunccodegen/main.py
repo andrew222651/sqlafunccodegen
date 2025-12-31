@@ -348,7 +348,8 @@ class PythonGenerator:
                     graphile_type["domainBaseTypeId"],
                 )
         # we could do `TypeEngine[$python_type]` as a fallback if there's any
-        # benefit
+        # benefit. for user-defined types, we could define classes that
+        # inherit from UserDefinedType, if there's a need.
         return "None"
 
     def generate(self, mode: Mode) -> str:
