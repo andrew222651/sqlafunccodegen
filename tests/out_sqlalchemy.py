@@ -6,7 +6,7 @@ from ipaddress import (
     IPv4Interface, IPv6Interface,
     IPv4Network, IPv6Network,
 )
-from typing import Annotated, Any, Mapping, Sequence, TypeAliasType, TypeVar, Union
+from typing import Annotated, Any, Mapping, Sequence, TypeVar, Union
 from uuid import UUID
 
 import asyncpg
@@ -14,8 +14,8 @@ import sqlalchemy
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.functions import GenericFunction
-JsonValue = TypeAliasType("JsonValue", Union[dict[str, "JsonValue"], list["JsonValue"], str, int, float, bool, None])
-JsonFrozen = TypeAliasType("JsonFrozen", Union[Mapping[str, "JsonFrozen"], Sequence["JsonFrozen"], str, int, float, bool, None])
+type JsonValue = Union[dict[str, "JsonValue"], list["JsonValue"], str, int, float, bool, None]
+type JsonFrozen = Union[Mapping[str, "JsonFrozen"], Sequence["JsonFrozen"], str, int, float, bool, None]
 class array_id(GenericFunction[list[Union[int, None]] | None]):
     inherit_cache = True
     type = postgresql.ARRAY(postgresql.INTEGER)

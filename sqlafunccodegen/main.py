@@ -174,7 +174,7 @@ from ipaddress import (
     IPv4Interface, IPv6Interface,
     IPv4Network, IPv6Network,
 )
-from typing import Annotated, Any, Mapping, Sequence, TypeAliasType, TypeVar, Union
+from typing import Annotated, Any, Mapping, Sequence, TypeVar, Union
 from uuid import UUID
 
 import asyncpg
@@ -192,8 +192,8 @@ import pydantic
 """
 
 DEFINITIONS = """\
-JsonValue = TypeAliasType("JsonValue", Union[dict[str, "JsonValue"], list["JsonValue"], str, int, float, bool, None])
-JsonFrozen = TypeAliasType("JsonFrozen", Union[Mapping[str, "JsonFrozen"], Sequence["JsonFrozen"], str, int, float, bool, None])
+type JsonValue = Union[dict[str, "JsonValue"], list["JsonValue"], str, int, float, bool, None]
+type JsonFrozen = Union[Mapping[str, "JsonFrozen"], Sequence["JsonFrozen"], str, int, float, bool, None]
 """
 
 PYDANTIC_DEFINITIONS = """\
