@@ -1,9 +1,10 @@
 import asyncio
 import pathlib
 from collections import Counter, defaultdict
+from collections.abc import Sequence
 from enum import StrEnum
-from functools import lru_cache
-from typing import Annotated, Sequence
+from functools import cache
+from typing import Annotated
 
 import dukpy
 import typer
@@ -11,6 +12,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.asyncio.engine import create_async_engine
+
 
 SCHEMA = "public"
 
@@ -54,17 +56,18 @@ class Mode(StrEnum):
 
 def main(
     dest: Annotated[
-        str,
-        typer.Option(help="user:pass@host:port/dbname"),
+        str, typer.Option(help="user:pass@host:port/dbname")
     ] = "postgres:postgres@localhost:5432/postgres",
     mode: Annotated[
         Mode,
-        typer.Option(help="""
+        typer.Option(
+            help="""
 'asyncpg_only' mode generates functions that take and return Python
 values, while 'sqlalchemy' mode generates functions that act
 as sqlalchemy.func functions and can be used within a
 SQLAlchemy SQL expression.
-            """.strip()),
+            """.strip()
+        ),
     ] = Mode.sqlalchemy,
 ):
     dest = dest.removeprefix("postgres://").removeprefix("postgresql://")
@@ -141,8 +144,7 @@ pg_catalog_types = {
         sqla_type="postgresql.TIMESTAMP(timezone=True)",
     ),
     "interval": TypeStrings(
-        python_type="datetime.timedelta",
-        sqla_type="postgresql.INTERVAL",
+        python_type="datetime.timedelta", sqla_type="postgresql.INTERVAL"
     ),
     "line": TypeStrings(python_type="asyncpg.Line"),
     "lseg": TypeStrings(python_type="asyncpg.LineSegment"),
@@ -213,12 +215,7 @@ def __convert_input(v):
 
 
 def docstringize(s: str) -> str:
-    if s.startswith("'"):
-        s = "''" + s + "''"
-    else:
-        s = '""' + s + '""'
-
-    return s
+    return "''" + s + "''" if s.startswith("'") else '""' + s + '""'
 
 
 class PythonGenerator:
@@ -250,7 +247,7 @@ class PythonGenerator:
         for key in self.graphile_attrs_by_class_id:
             self.graphile_attrs_by_class_id[key].sort(key=lambda x: x["num"])
 
-    @lru_cache(maxsize=None)
+    @cache
     def graphile_type_to_python(
         self, graphile_type_id: str, in_: bool, mode: Mode
     ) -> str:
@@ -261,17 +258,14 @@ class PythonGenerator:
                 graphile_type["arrayItemTypeId"]
             ]
             item_python_type = self.graphile_type_to_python(
-                item_graphile_type["id"],
-                in_=in_,
-                mode=mode,
+                item_graphile_type["id"], in_=in_, mode=mode
             )
             # in postgres, arrays can have any dimension, but asyncpg doesn't
             # support more than one
             if in_:
                 return f"Sequence[{item_python_type}] | None"
-            else:
-                return f"list[{item_python_type}] | None"
-        elif graphile_type["namespaceName"] == "pg_catalog":
+            return f"list[{item_python_type}] | None"
+        if graphile_type["namespaceName"] == "pg_catalog":
             if graphile_type["name"] in pg_catalog_types:
                 ts = pg_catalog_types[graphile_type["name"]]
                 if in_ and ts.python_type_in:
@@ -294,25 +288,22 @@ class PythonGenerator:
                 )
                 self.out_enums.add(e)
                 return f"{enum_name} | None"
-            elif graphile_type["classId"] is not None:
+            if graphile_type["classId"] is not None:
                 if mode == Mode.sqlalchemy:
                     if in_:
                         return (
                             "tuple | Mapping[str, Any] | asyncpg.Record | None"
                         )
-                    else:
-                        return "asyncpg.Record | None"
+                    return "asyncpg.Record | None"
                 self.class_ids_to_generate.add(graphile_type["classId"])
                 return f"Model__{graphile_type['name']} | None"
-            elif graphile_type["domainBaseTypeId"] is not None:
+            if graphile_type["domainBaseTypeId"] is not None:
                 return self.graphile_type_to_python(
-                    graphile_type["domainBaseTypeId"],
-                    in_=in_,
-                    mode=mode,
+                    graphile_type["domainBaseTypeId"], in_=in_, mode=mode
                 )
         return "Any"
 
-    @lru_cache(maxsize=None)
+    @cache
     def graphile_type_to_sqla(self, graphile_type_id: str) -> str:
         graphile_type = self.graphile_type_by_id[graphile_type_id]
 
@@ -336,10 +327,10 @@ class PythonGenerator:
                 out_enum = ", ".join(
                     repr(ev) for ev in graphile_type["enumVariants"]
                 )
-                return f"postgresql.ENUM({out_enum}, name={repr(graphile_type['name'])})"
-            elif graphile_type["domainBaseTypeId"] is not None:
+                return f"postgresql.ENUM({out_enum}, name={graphile_type['name']!r})"
+            if graphile_type["domainBaseTypeId"] is not None:
                 return self.graphile_type_to_sqla(
-                    graphile_type["domainBaseTypeId"],
+                    graphile_type["domainBaseTypeId"]
                 )
         # we could do `TypeEngine[$python_type]` as a fallback if there's any
         # benefit. for user-defined types, we could define classes that
@@ -408,7 +399,7 @@ class PythonGenerator:
             out = f"class Model__{class_['name']}(pydantic.BaseModel):\n"
             graphile_type = self.graphile_type_by_id[class_["typeId"]]
             if graphile_type["description"]:
-                out += f"    {repr(graphile_type['description'])}\n"
+                out += f"    {graphile_type['description']!r}\n"
             out += """
     model_config=pydantic.ConfigDict(arbitrary_types_allowed=True)
 
@@ -442,7 +433,7 @@ class PythonGenerator:
                 if attr["description"]:
                     attr_type = (
                         f"Annotated[{basic_attr_type}, pydantic.Field("
-                        f"description={repr(attr['description'])}"
+                        f"description={attr['description']!r}"
                         ")]"
                     )
                 else:
@@ -532,7 +523,7 @@ class PythonGenerator:
 
         if mode == "asyncpg_only":
             dollar_args = ", ".join(
-                f"${i+1}" for i in range(len(procedure["argNames"]))
+                f"${i + 1}" for i in range(len(procedure["argNames"]))
             )
             func_expr = f"{procedure['name']}({dollar_args})"
             seq = f"'select {func_expr}', {out_args}"
@@ -543,18 +534,17 @@ class PythonGenerator:
             else:
                 out_return_type = scalar_return_type
                 ret_expr = f"__convert_output({scalar_return_type}, await conn.fetchval({seq}))"
-            return f"""async def {procedure['name']}(
+            return f"""async def {procedure["name"]}(
     conn: asyncpg.Connection, {out_params}
 ) -> {out_return_type}:
     {out_docstring}
     return {ret_expr}"""
-        else:
-            # can be "None" and parens don't matter, see https://github.com/sqlalchemy/sqlalchemy/blob/a96c607cc53f16b364d5025c5a5de1470661d3c9/lib/sqlalchemy/sql/functions.py#L1623
-            sqla_ret = self.graphile_type_to_sqla(return_type["id"])
-            out_params_comma = out_params + "," if out_params else ""
-            out_args_comma = out_args + "," if out_args else ""
+        # can be "None" and parens don't matter, see https://github.com/sqlalchemy/sqlalchemy/blob/a96c607cc53f16b364d5025c5a5de1470661d3c9/lib/sqlalchemy/sql/functions.py#L1623
+        sqla_ret = self.graphile_type_to_sqla(return_type["id"])
+        out_params_comma = out_params + "," if out_params else ""
+        out_args_comma = out_args + "," if out_args else ""
 
-            return f"""class {procedure['name']}(GenericFunction[{scalar_return_type}]):
+        return f"""class {procedure["name"]}(GenericFunction[{scalar_return_type}]):
     inherit_cache = True
     type = {sqla_ret}
     package = "sqlafunccodegen"

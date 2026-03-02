@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from . import out_asyncpg_only, out_sqlalchemy
 
+
 engine = create_async_engine(
     "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres",
     echo=True,

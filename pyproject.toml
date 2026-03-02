@@ -21,18 +21,6 @@ sqlafunccodegen = "sqlafunccodegen.main:cli"
 include = ["sqlafunccodegen"]
 namespaces = false
 
-[tool.black]
-line-length = 80
-extend-exclude = '^/tests/out'
-
-[tool.isort]
-profile = "black"
-line_length = 80
-lines_after_imports = 2
-combine_as_imports = true
-py_version=313
-extend_skip_glob = ["tests/out*"]
-
 [tool.pyright]
 pythonVersion = "3.13"
 reportIncompatibleVariableOverride = true
@@ -43,6 +31,43 @@ strictDictionaryInference = true
 strictSetInference = true
 
 [tool.ruff]
-lint.select = ["F401"]
+lint.select = [
+  "A",
+  "B007",
+  "B009",
+  "B010",
+  "B013",
+  "B014",
+  "B015",
+  "B018",
+  "B020",
+  "B023",
+  "F401",
+  "F402",
+  "F541",
+  "F634",
+  "F841",
+  "F842",
+  "FAST001",
+  "FAST002",
+  "FURB",
+  "I",
+  "PERF",
+  "PIE",
+  "PLC0414",
+  "RET",
+  "RUF",
+  "SIM",
+  "UP",
+]
 line-length = 80
 extend-exclude = ['tests/out*']
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+lines-after-imports = 2
+split-on-trailing-comma = false
+
+[tool.ruff.format]
+skip-magic-trailing-comma = true
+
