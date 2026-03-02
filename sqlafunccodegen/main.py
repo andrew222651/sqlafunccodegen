@@ -12,7 +12,6 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.asyncio.engine import create_async_engine
 
-
 SCHEMA = "public"
 
 
@@ -60,14 +59,12 @@ def main(
     ] = "postgres:postgres@localhost:5432/postgres",
     mode: Annotated[
         Mode,
-        typer.Option(
-            help="""
+        typer.Option(help="""
 'asyncpg_only' mode generates functions that take and return Python
 values, while 'sqlalchemy' mode generates functions that act
 as sqlalchemy.func functions and can be used within a
 SQLAlchemy SQL expression.
-            """.strip()
-        ),
+            """.strip()),
     ] = Mode.sqlalchemy,
 ):
     dest = dest.removeprefix("postgres://").removeprefix("postgresql://")

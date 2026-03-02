@@ -2,7 +2,6 @@ import pathlib
 
 import dukpy
 
-
 GRAPHILE_VERSION = "4.13.0"
 PROJECT_ROOT = pathlib.Path(__file__).parent.parent
 
