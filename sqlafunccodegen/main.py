@@ -546,7 +546,7 @@ class PythonGenerator:
 
         return f"""class {procedure["name"]}(GenericFunction[{scalar_return_type}]):
     inherit_cache = True
-    type = {sqla_ret}
+    type = {sqla_ret}  # type: ignore
     package = "sqlafunccodegen"
     def __init__(self, {out_params_comma} **kwargs):
         {out_docstring}
