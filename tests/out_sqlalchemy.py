@@ -18,7 +18,7 @@ type JsonValue = Union[dict[str, "JsonValue"], list["JsonValue"], str, int, floa
 type JsonFrozen = Union[Mapping[str, "JsonFrozen"], Sequence["JsonFrozen"], str, int, float, bool, None]
 class array_id(GenericFunction[list[Union[int, None]] | None]):
     inherit_cache = True
-    type = postgresql.ARRAY(postgresql.INTEGER)
+    type = postgresql.ARRAY(postgresql.INTEGER)  # type: ignore
     package = "sqlafunccodegen"
     def __init__(self, arr: Sequence[Union[int, None]] | None | sqlalchemy.ColumnExpressionArgument[Sequence[Union[int, None]] | None], **kwargs):
         
@@ -28,7 +28,7 @@ class array_id(GenericFunction[list[Union[int, None]] | None]):
 
 class c2vector_id(GenericFunction[asyncpg.Record | None]):
     inherit_cache = True
-    type = None
+    type = None  # type: ignore
     package = "sqlafunccodegen"
     def __init__(self, c: tuple | Mapping[str, Any] | asyncpg.Record | None | sqlalchemy.ColumnExpressionArgument[tuple | Mapping[str, Any] | asyncpg.Record | None], **kwargs):
         
@@ -38,7 +38,7 @@ class c2vector_id(GenericFunction[asyncpg.Record | None]):
 
 class circle_id(GenericFunction[Union[asyncpg.Circle, None]]):
     inherit_cache = True
-    type = None
+    type = None  # type: ignore
     package = "sqlafunccodegen"
     def __init__(self, c: Union[asyncpg.Circle, None] | sqlalchemy.ColumnExpressionArgument[Union[asyncpg.Circle, None]], **kwargs):
         
@@ -48,7 +48,7 @@ class circle_id(GenericFunction[Union[asyncpg.Circle, None]]):
 
 class complex_array_id(GenericFunction[list[asyncpg.Record | None] | None]):
     inherit_cache = True
-    type = None
+    type = None  # type: ignore
     package = "sqlafunccodegen"
     def __init__(self, ca: Sequence[tuple | Mapping[str, Any] | asyncpg.Record | None] | None | sqlalchemy.ColumnExpressionArgument[Sequence[tuple | Mapping[str, Any] | asyncpg.Record | None] | None], **kwargs):
         
@@ -58,7 +58,7 @@ class complex_array_id(GenericFunction[list[asyncpg.Record | None] | None]):
 
 class complex_id(GenericFunction[asyncpg.Record | None]):
     inherit_cache = True
-    type = None
+    type = None  # type: ignore
     package = "sqlafunccodegen"
     def __init__(self, z: tuple | Mapping[str, Any] | asyncpg.Record | None | sqlalchemy.ColumnExpressionArgument[tuple | Mapping[str, Any] | asyncpg.Record | None], **kwargs):
         
@@ -68,7 +68,7 @@ class complex_id(GenericFunction[asyncpg.Record | None]):
 
 class get_mood(GenericFunction[str | None]):
     inherit_cache = True
-    type = postgresql.ENUM('happy', 'sad', 'neutral', name='mood')
+    type = postgresql.ENUM('happy', 'sad', 'neutral', name='mood')  # type: ignore
     package = "sqlafunccodegen"
     def __init__(self, _mood: str | None | sqlalchemy.ColumnExpressionArgument[str | None], **kwargs):
         
@@ -78,7 +78,7 @@ class get_mood(GenericFunction[str | None]):
 
 class get_range(GenericFunction[Any]):
     inherit_cache = True
-    type = None
+    type = None  # type: ignore
     package = "sqlafunccodegen"
     def __init__(self,  **kwargs):
         
@@ -88,7 +88,7 @@ class get_range(GenericFunction[Any]):
 
 class jsonb_id(GenericFunction[Union[JsonValue, None]]):
     inherit_cache = True
-    type = postgresql.JSONB
+    type = postgresql.JSONB  # type: ignore
     package = "sqlafunccodegen"
     def __init__(self, j: Union[JsonFrozen, None] | sqlalchemy.ColumnExpressionArgument[Union[JsonFrozen, None]], **kwargs):
         '''Returns the same jsonb value passed in'''
@@ -98,7 +98,7 @@ class jsonb_id(GenericFunction[Union[JsonValue, None]]):
 
 class set_of_complex_arrays(GenericFunction[list[asyncpg.Record | None] | None]):
     inherit_cache = True
-    type = None
+    type = None  # type: ignore
     package = "sqlafunccodegen"
     def __init__(self,  **kwargs):
         
@@ -108,7 +108,7 @@ class set_of_complex_arrays(GenericFunction[list[asyncpg.Record | None] | None])
 
 class unitthing(GenericFunction[asyncpg.Record | None]):
     inherit_cache = True
-    type = None
+    type = None  # type: ignore
     package = "sqlafunccodegen"
     def __init__(self, z: tuple | Mapping[str, Any] | asyncpg.Record | None | sqlalchemy.ColumnExpressionArgument[tuple | Mapping[str, Any] | asyncpg.Record | None], **kwargs):
         
